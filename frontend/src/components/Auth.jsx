@@ -39,7 +39,24 @@ export default function Auth({ onLoginSuccess }) {
     <div className="auth-container">
       <div className="auth-sidebar">
         <div className="auth-brand-logo">
-          <div className="logo-icon">T</div>
+          <svg className="logo-icon-svg" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
+            <defs>
+              <linearGradient id="odooGradAuth" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#714B67" />
+                <stop offset="100%" stopColor="#a24b89" />
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="8" fill="url(#odooGradAuth)" />
+            <rect x="5" y="8" width="13" height="10" rx="1.5" fill="white" />
+            <path d="M19 11h5.5l2.5 3v4a1 1 0 0 1-1 1h-7v-8z M21 12.5h3.2l1.3 1.8H21v-1.8z" fill="white" fillRule="evenodd" />
+            <circle cx="10" cy="19.5" r="3" fill="#111827" stroke="white" strokeWidth="1.5" />
+            <circle cx="21" cy="19.5" r="3" fill="#111827" stroke="white" strokeWidth="1.5" />
+            <circle cx="10" cy="19.5" r="1" fill="white" />
+            <circle cx="21" cy="19.5" r="1" fill="white" />
+            <rect x="1" y="10" width="3" height="1.5" rx="0.75" fill="white" opacity="0.6" />
+            <rect x="0.5" y="13" width="3.5" height="1.5" rx="0.75" fill="white" opacity="0.8" />
+            <rect x="2" y="16" width="2" height="1.5" rx="0.75" fill="white" opacity="0.4" />
+          </svg>
           <span className="auth-brand-text">TransitOps</span>
         </div>
         
