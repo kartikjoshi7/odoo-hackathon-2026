@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Check, X, AlertTriangle, Hammer, Wrench } from 'lucide-react';
+import api from '../utils/api';
 
 export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance, onUpdateVehicles, onAddExpense, userRole }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,23 +53,19 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
 
     const finalServiceType = serviceType === 'Other' ? customServiceType.trim() : serviceType;
 
-    const newLog = {
-      id: `MNT-${Date.now().toString().slice(-4)}`,
-      vehicleReg: selectedVehicle,
-      type: finalServiceType,
+    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === selectedVehicle);
+
+    const payload = {
+      vehicle_id: vehicle.id,
+      description: finalServiceType,
       cost: costNum,
-      date: new Date().toISOString().split('T')[0],
-      status: 'Active',
-      notes: notes.trim()
+      start_date: new Date().toISOString().split('T')[0],
+      status: 'Open'
     };
 
-    // Update vehicle status to "In Shop"
-    const updatedVehicles = vehicles.map(v => v.regNum === selectedVehicle ? { ...v, status: 'In Shop' } : v);
-    const updatedMaintenance = [...maintenance, newLog];
-
-    onUpdateMaintenance(updatedMaintenance);
-    onUpdateVehicles(updatedVehicles);
-    closeModal();
+    api.post('/maintenance/', payload)
+      .then(() => closeModal())
+      .catch(e => setValidationError(e.response?.data?.detail || 'Failed to schedule maintenance'));
   };
 
   const openCloseModal = (log) => {
@@ -97,37 +94,21 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
       return;
     }
 
-    // Update maintenance log status to Closed
-    const updatedMaintenance = maintenance.map(m => m.id === closingLog.id ? { 
-      ...m, 
-      status: 'Closed', 
-      cost: costNum,
-      notes: `${m.notes ? m.notes + ' | ' : ''}Resolved. Final cost: $${costNum}.`
-    } : m);
+    const vehicle = vehicles.find(v => v.id === closingLog.vehicle_id);
 
-    // Update vehicle status back to "Available" (unless retired)
-    const updatedVehicles = vehicles.map(v => {
-      if (v.regNum === closingLog.vehicleReg) {
-        return { ...v, status: v.status === 'Retired' ? 'Retired' : 'Available' };
-      }
-      return v;
-    });
-
-    // Record as operational expense automatically
-    const newExpense = {
-      id: `EXP-${Date.now().toString().slice(-4)}`,
-      vehicleReg: closingLog.vehicleReg,
-      category: 'Maintenance',
-      cost: costNum,
-      date: new Date().toISOString().split('T')[0],
-      notes: `Maintenance: ${closingLog.type}`
-    };
-
-    onUpdateMaintenance(updatedMaintenance);
-    onUpdateVehicles(updatedVehicles);
-    onAddExpense(newExpense);
-    
-    closeCloseModal();
+    api.put(`/maintenance/${closingLog.id}/close?final_cost=${costNum}`)
+      .then(() => {
+        // Record as operational expense automatically
+        api.post('/financials/expense', {
+          vehicle_id: vehicle.id,
+          type: 'Other',
+          cost: costNum,
+          date: new Date().toISOString().split('T')[0]
+        }).catch(e => console.error("Failed to log expense", e));
+        
+        closeCloseModal();
+      })
+      .catch(e => setCloseError(e.response?.data?.detail || 'Failed to close maintenance'));
   };
 
   return (
@@ -170,30 +151,34 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
                   </td>
                 </tr>
               ) : (
-                [...maintenance].reverse().map((log) => (
+                [...maintenance].reverse().map((log) => {
+                  const vehicleReg = vehicles.find(v => v.id === log.vehicle_id)?.reg_num || log.vehicleReg || log.vehicle_id;
+                  const logStatus = log.status === 'Open' || log.status === 'Active' ? 'Active' : 'Closed';
+                  
+                  return (
                   <tr key={log.id}>
                     <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{log.id}</td>
-                    <td style={{ fontWeight: '600' }}>{log.vehicleReg}</td>
+                    <td style={{ fontWeight: '600' }}>{vehicleReg}</td>
                     <td>
                       <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Hammer size={12} style={{ color: 'var(--text-muted)' }} />
-                        {log.type}
+                        {log.description || log.type}
                       </div>
                       {log.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{log.notes}</div>}
                     </td>
-                    <td>{log.date}</td>
-                    <td style={{ fontWeight: '600', color: log.status === 'Closed' ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    <td>{log.start_date || log.date}</td>
+                    <td style={{ fontWeight: '600', color: logStatus === 'Closed' ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                       ${log.cost.toLocaleString()}
                     </td>
                     <td>
-                      <span className={`badge badge-${log.status === 'Active' ? 'inshop' : 'available'}`}>
+                      <span className={`badge badge-${logStatus === 'Active' ? 'inshop' : 'available'}`}>
                         <span className="badge-dot"></span>
-                        {log.status === 'Active' ? 'In Shop' : 'Closed'}
+                        {logStatus === 'Active' ? 'In Shop' : 'Closed'}
                       </span>
                     </td>
                     {canEdit && (
                       <td style={{ textAlign: 'right' }}>
-                        {log.status === 'Active' ? (
+                        {logStatus === 'Active' ? (
                           <button onClick={() => openCloseModal(log)} className="btn btn-success btn-sm">
                             <Check size={12} /> Resolve Order
                           </button>
@@ -203,7 +188,8 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
                       </td>
                     )}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -237,8 +223,8 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
                   >
                     <option value="">-- Choose Vehicle --</option>
                     {eligibleVehicles.map(v => (
-                      <option key={v.regNum} value={v.regNum}>
-                        {v.regNum} - {v.name} ({v.status})
+                      <option key={v.id} value={v.reg_num || v.regNum}>
+                        {v.reg_num || v.regNum} - {v.name} ({v.status})
                       </option>
                     ))}
                   </select>
@@ -328,8 +314,8 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
                 <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--border-light)', borderRadius: '8px', fontSize: '13px' }}>
                   <strong>Service Order Details:</strong>
                   <div style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
-                    Vehicle: {closingLog.vehicleReg}<br />
-                    Service: {closingLog.type}<br />
+                    Vehicle: {vehicles.find(v => v.id === closingLog.vehicle_id)?.reg_num || closingLog.vehicleReg}<br />
+                    Service: {closingLog.description || closingLog.type}<br />
                     Estimated Cost: ${closingLog.cost}
                   </div>
                 </div>

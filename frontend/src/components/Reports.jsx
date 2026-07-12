@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Printer, TrendingUp, BarChart2, DollarSign, Fuel } from 'lucide-react';
-import { db } from '../utils/db';
+
 
 export default function Reports({ vehicles, trips, fuelLogs, maintenance, expenses }) {
   const [hoveredBar, setHoveredBar] = useState(null);
@@ -21,16 +21,16 @@ export default function Reports({ vehicles, trips, fuelLogs, maintenance, expens
     const roi = v.acquisitionCost > 0 ? (((totalRevenue - totalOpCost) / v.acquisitionCost) * 100).toFixed(1) : 0;
 
     return {
-      regNum: v.regNum,
-      name: v.name,
+      regNum: v.registration_number || v.regNum,
+      name: v.model || v.name,
       fuelCost,
       maintCost,
       otherCost,
-      totalOpCost,
-      fuelEfficiency: Number(fuelEfficiency),
-      totalRevenue,
-      roi: Number(roi),
-      acquisitionCost: v.acquisitionCost
+      totalOpCost: totalOpCost || 0,
+      fuelEfficiency: Number(fuelEfficiency) || 0,
+      totalRevenue: totalRevenue || 0,
+      roi: Number(roi) || 0,
+      acquisitionCost: v.acquisition_cost || v.acquisitionCost || 0
     };
   });
 
@@ -48,13 +48,13 @@ export default function Reports({ vehicles, trips, fuelLogs, maintenance, expens
           r.regNum,
           r.name,
           v?.type || '',
-          v?.maxLoad || 0,
+          v?.max_load_capacity || v?.maxLoad || 0,
           v?.odometer || 0,
-          r.acquisitionCost,
+          r.acquisitionCost || 0,
           v?.status || '',
-          r.totalOpCost,
-          r.fuelEfficiency,
-          r.roi
+          r.totalOpCost || 0,
+          r.fuelEfficiency || 0,
+          r.roi || 0
         ];
       });
     } else if (type === 'trips') {
@@ -217,7 +217,7 @@ export default function Reports({ vehicles, trips, fuelLogs, maintenance, expens
 
                 return (
                   <g key={d.regNum}
-                     onMouseEnter={() => setHoveredBar({ type: 'cost', index: idx, label: `${d.regNum}: $${d.totalOpCost.toLocaleString()}` })}
+                     onMouseEnter={() => setHoveredBar({ type: 'cost', index: idx, label: `${d.regNum}: $${(d.totalOpCost || 0).toLocaleString()}` })}
                      onMouseLeave={() => setHoveredBar(null)}>
                     <rect 
                       x={startX} 
@@ -274,9 +274,9 @@ export default function Reports({ vehicles, trips, fuelLogs, maintenance, expens
                   <tr key={r.regNum}>
                     <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{r.regNum}</td>
                     <td>{r.name}</td>
-                    <td>${r.acquisitionCost.toLocaleString()}</td>
-                    <td className="text-success">${r.totalRevenue.toLocaleString()}</td>
-                    <td className="text-danger">${r.totalOpCost.toLocaleString()}</td>
+                    <td>${(r.acquisitionCost || 0).toLocaleString()}</td>
+                    <td className="text-success">${(r.totalRevenue || 0).toLocaleString()}</td>
+                    <td className="text-danger">${(r.totalOpCost || 0).toLocaleString()}</td>
                     <td style={{ 
                       fontWeight: '700', 
                       color: isPositiveROI ? 'var(--status-available)' : 'var(--status-retired)' 

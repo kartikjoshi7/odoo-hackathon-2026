@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db } from '../utils/db';
+import api from '../utils/api';
 import { Lock, Mail, Shield, AlertTriangle } from 'lucide-react';
 
 export default function Auth({ onLoginSuccess }) {
@@ -14,18 +14,35 @@ export default function Auth({ onLoginSuccess }) {
     { email: 'analyst@transitops.com', label: 'Financial Analyst', desc: 'Track ROI, expenses & cost analysis.' }
   ];
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please enter both email and password.');
       return;
     }
 
-    const user = db.login(email, password);
-    if (user) {
-      onLoginSuccess(user);
-    } else {
-      setError('Invalid email or password. Use password: "password"');
+    try {
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+
+      const loginRes = await api.post('/auth/login', formData, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+      
+      localStorage.setItem('transitops_token', loginRes.data.access_token);
+      
+      const meRes = await api.get('/auth/me');
+      localStorage.setItem('transitops_active_user', JSON.stringify(meRes.data));
+      
+      onLoginSuccess(meRes.data);
+    } catch (err) {
+      if (err.response && err.response.data && err.response.data.detail) {
+        // Show exact error from backend (e.g., "Incorrect email or password")
+        setError(err.response.data.detail);
+      } else {
+        setError('Network Error: Unable to connect to the backend server.');
+      }
     }
   };
 

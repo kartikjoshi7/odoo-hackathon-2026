@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Check, X, ShieldAlert, Navigation, ArrowRight, Play, Wrench } from 'lucide-react';
-import { db } from '../utils/db';
+import api from '../utils/api';
+
 
 export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdateVehicles, onUpdateDrivers, onAddFuelLog, userRole }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -73,16 +74,15 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
     }
 
     // Check cargo capacity of selected vehicle
-    const vehicle = vehicles.find(v => v.regNum === selectedVehicle);
-    if (vehicle && weightNum > vehicle.maxLoad) {
-      setValidationError(`Weight Limit Exceeded: Cargo weight (${weightNum} kg) exceeds maximum load capacity of selected vehicle ${vehicle.name} (${vehicle.maxLoad} kg).`);
+    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === selectedVehicle);
+    if (vehicle && weightNum > (vehicle.max_load_capacity || vehicle.max_load || vehicle.maxLoad)) {
+      setValidationError(`Weight Limit Exceeded: Cargo weight (${weightNum} kg) exceeds maximum load capacity of selected vehicle ${vehicle.name}.`);
       return;
     }
 
-    // Check driver license validity
     const driver = drivers.find(d => d.name === selectedDriver);
     if (driver) {
-      const expiry = new Date(driver.licenseExpiry);
+      const expiry = new Date(driver.license_expiry || driver.licenseExpiry);
       if (expiry < today) {
         setValidationError(`Cannot dispatch: Selected driver ${driver.name} has an expired license.`);
         return;
@@ -93,82 +93,35 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
       }
     }
 
-    const newTrip = {
-      id: `TRIP-${Date.now().toString().slice(-4)}`,
+    const payload = {
       source: source.trim(),
       destination: destination.trim(),
-      vehicleReg: selectedVehicle,
-      driverName: selectedDriver,
-      cargoWeight: weightNum,
-      plannedDistance: distNum,
-      status: 'Draft',
-      startDate: new Date().toISOString().split('T')[0],
-      finalOdometer: null,
-      fuelConsumed: null,
-      revenue: Math.round(weightNum * distNum * 0.002) // simulated revenue: $0.002 per kg per km
+      vehicle_id: vehicle.id,
+      driver_id: driver.id,
+      cargo_weight: weightNum,
+      planned_distance: distNum
     };
 
-    onUpdateTrips([...trips, newTrip]);
-    closeModal();
+    api.post('/trips/', payload)
+      .then(() => closeModal())
+      .catch(e => setValidationError(e.response?.data?.detail || 'Failed to create trip'));
   };
 
   const handleDispatchTrip = (tripId) => {
-    const trip = trips.find(t => t.id === tripId);
-    if (!trip) return;
-
-    // Double check that driver and vehicle are still available
-    const vehicle = vehicles.find(v => v.regNum === trip.vehicleReg);
-    const driver = drivers.find(d => d.name === trip.driverName);
-
-    if (vehicle && vehicle.status === 'On Trip') {
-      alert(`Vehicle ${trip.vehicleReg} is already on another trip and cannot be dispatched.`);
-      return;
-    }
-    if (driver && driver.status === 'On Trip') {
-      alert(`Driver ${trip.driverName} is already assigned to another trip and cannot be dispatched.`);
-      return;
-    }
-
-    // Update statuses to "On Trip"
-    const updatedTrips = trips.map(t => t.id === tripId ? { ...t, status: 'Dispatched' } : t);
-    const updatedVehicles = vehicles.map(v => v.regNum === trip.vehicleReg ? { ...v, status: 'On Trip' } : v);
-    const updatedDrivers = drivers.map(d => d.name === trip.driverName ? { ...d, status: 'On Trip' } : d);
-
-    onUpdateTrips(updatedTrips);
-    onUpdateVehicles(updatedVehicles);
-    onUpdateDrivers(updatedDrivers);
+    // Legacy dispatch for drafts is removed, API POST creates DISPATCHED trips
   };
 
   const handleCancelTrip = (tripId) => {
-    const trip = trips.find(t => t.id === tripId);
-    if (!trip) return;
-
-    const wasDispatched = trip.status === 'Dispatched';
-
-    // Update status to Cancelled
-    const updatedTrips = trips.map(t => t.id === tripId ? { ...t, status: 'Cancelled' } : t);
-    
-    // If it was already dispatched, restore vehicle and driver to Available
-    let updatedVehicles = vehicles;
-    let updatedDrivers = drivers;
-
-    if (wasDispatched) {
-      updatedVehicles = vehicles.map(v => v.regNum === trip.vehicleReg ? { ...v, status: 'Available' } : v);
-      updatedDrivers = drivers.map(d => d.name === trip.driverName ? { ...d, status: 'Available' } : d);
-    }
-
-    onUpdateTrips(updatedTrips);
-    onUpdateVehicles(updatedVehicles);
-    onUpdateDrivers(updatedDrivers);
+    api.put(`/trips/${tripId}/cancel`)
+      .catch(e => console.error("Failed to cancel trip", e));
   };
 
   const openCompleteModal = (trip) => {
     setCompletingTrip(trip);
-    const vehicle = vehicles.find(v => v.regNum === trip.vehicleReg);
-    // Suggest final odometer as current + planned distance
+    const vehicle = vehicles.find(v => v.id === trip.vehicle_id);
     const currentOdo = vehicle ? vehicle.odometer : 0;
-    setFinalOdometer(currentOdo + trip.plannedDistance);
-    setFuelConsumed(Math.round(trip.plannedDistance * 0.25)); // Estimate 25L per 100km
+    setFinalOdometer(currentOdo + (trip.planned_distance || trip.plannedDistance));
+    setFuelConsumed(Math.round((trip.planned_distance || trip.plannedDistance) * 0.25));
     setCompletionError('');
     setIsCompleteModalOpen(true);
   };
@@ -189,7 +142,7 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
     const odoNum = Number(finalOdometer);
     const fuelNum = Number(fuelConsumed);
 
-    const vehicle = vehicles.find(v => v.regNum === completingTrip.vehicleReg);
+    const vehicle = vehicles.find(v => v.id === completingTrip.vehicle_id);
     const currentOdo = vehicle ? vehicle.odometer : 0;
 
     if (isNaN(odoNum) || odoNum <= currentOdo) {
@@ -202,42 +155,19 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
       return;
     }
 
-    // Complete the trip
-    const updatedTrips = trips.map(t => t.id === completingTrip.id ? { 
-      ...t, 
-      status: 'Completed',
-      endDate: new Date().toISOString().split('T')[0],
-      finalOdometer: odoNum,
-      fuelConsumed: fuelNum
-    } : t);
-
-    // Release vehicle and driver to Available, and update odometer
-    const updatedVehicles = vehicles.map(v => v.regNum === completingTrip.vehicleReg ? { 
-      ...v, 
-      status: 'Available', 
-      odometer: odoNum 
-    } : v);
-
-    const updatedDrivers = drivers.map(d => d.name === completingTrip.driverName ? { 
-      ...d, 
-      status: 'Available' 
-    } : d);
-
-    // Record Fuel Log automatically (simulated fuel cost: $1.50 per liter)
-    const fuelLog = {
-      id: `FUEL-${Date.now().toString().slice(-4)}`,
-      vehicleReg: completingTrip.vehicleReg,
-      liters: fuelNum,
-      cost: Math.round(fuelNum * 1.50),
-      date: new Date().toISOString().split('T')[0]
-    };
-
-    onUpdateTrips(updatedTrips);
-    onUpdateVehicles(updatedVehicles);
-    onUpdateDrivers(updatedDrivers);
-    onAddFuelLog(fuelLog);
-
-    closeCompleteModal();
+    const actual_distance = odoNum - currentOdo;
+    api.put(`/trips/${completingTrip.id}/complete?actual_distance=${actual_distance}`)
+      .then(() => {
+        // Record fuel log automatically
+        api.post('/financials/fuel', {
+          vehicle_id: vehicle.id,
+          liters: fuelNum,
+          cost: Math.round(fuelNum * 1.50),
+          date: new Date().toISOString().split('T')[0]
+        }).catch(e => console.error("Fuel log failed", e));
+        closeCompleteModal();
+      })
+      .catch(e => setCompletionError(e.response?.data?.detail || 'Failed to complete trip'));
   };
 
   return (
@@ -290,15 +220,16 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
                         <ArrowRight size={13} style={{ color: 'var(--text-muted)' }} />
                         <span>{trip.destination}</span>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Scheduled: {trip.startDate} {trip.endDate && `| Completed: ${trip.endDate}`}
-                      </div>
                     </td>
-                    <td>{trip.vehicleReg}</td>
-                    <td>{trip.driverName}</td>
                     <td>
-                      <div style={{ fontWeight: '500' }}>{trip.cargoWeight} kg</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{trip.plannedDistance} km</div>
+                      {vehicles.find(v => v.id === trip.vehicle_id)?.reg_num || trip.vehicleReg || `ID: ${trip.vehicle_id}`}
+                    </td>
+                    <td>
+                      {drivers.find(d => d.id === trip.driver_id)?.name || trip.driverName || `ID: ${trip.driver_id}`}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: '500' }}>{trip.cargo_weight || trip.cargoWeight} kg</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{trip.planned_distance || trip.plannedDistance} km</div>
                     </td>
                     <td>
                       <span className={`badge badge-${trip.status.toLowerCase()}`}>
@@ -307,7 +238,7 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
                       </span>
                     </td>
                     <td style={{ fontWeight: '600', color: 'var(--status-available)' }}>
-                      ${trip.revenue ? trip.revenue.toLocaleString() : '0'}
+                      ${(trip.cargo_weight || trip.cargoWeight) * (trip.planned_distance || trip.plannedDistance) * 0.002}
                     </td>
                     {canDispatch && (
                       <td style={{ textAlign: 'right' }}>
@@ -398,8 +329,8 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
                     >
                       <option value="">-- Choose Vehicle --</option>
                       {eligibleVehicles.map(v => (
-                        <option key={v.regNum} value={v.regNum}>
-                          {v.regNum} - {v.name} (Cap: {v.maxLoad} kg)
+                        <option key={v.id} value={v.reg_num || v.regNum}>
+                          {(v.reg_num || v.regNum)} - {v.name} (Cap: {v.max_load_capacity || v.max_load || v.maxLoad} kg)
                         </option>
                       ))}
                     </select>
@@ -499,7 +430,7 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
                     onChange={(e) => setFinalOdometer(e.target.value)}
                   />
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Current vehicle odometer is: <strong>{vehicles.find(v => v.regNum === completingTrip.vehicleReg)?.odometer || 0} km</strong>.
+                    Current vehicle odometer is: <strong>{vehicles.find(v => v.id === completingTrip.vehicle_id)?.odometer || 0} km</strong>.
                   </span>
                 </div>
 

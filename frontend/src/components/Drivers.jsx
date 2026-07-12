@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit2, Trash2, X, AlertTriangle, Mail } from 'lucide-react';
+import api from '../utils/api';
 
 export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
   // UI states
@@ -42,11 +43,11 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
   const openEditModal = (driver) => {
     setEditingDriver(driver);
     setFormName(driver.name);
-    setFormLicenseNum(driver.licenseNum);
-    setFormLicenseCategory(driver.licenseCategory);
-    setFormLicenseExpiry(driver.licenseExpiry);
-    setFormContactNum(driver.contactNum);
-    setFormSafetyScore(driver.safetyScore);
+    setFormLicenseNum(driver.license_number || driver.licenseNum);
+    setFormLicenseCategory(driver.license_class || driver.licenseCategory);
+    setFormLicenseExpiry(driver.license_expiry || driver.licenseExpiry);
+    setFormContactNum(driver.contact_number || driver.contactNum);
+    setFormSafetyScore(driver.safety_score || driver.safetyScore);
     setFormStatus(driver.status);
     setValidationError('');
     setIsModalOpen(true);
@@ -73,35 +74,33 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
 
     const savedDriver = {
       name: formName.trim(),
-      licenseNum: formLicenseNum.trim().toUpperCase(),
-      licenseCategory: formLicenseCategory,
-      licenseExpiry: formLicenseExpiry,
-      contactNum: formContactNum.trim(),
-      safetyScore: scoreNum,
+      license_number: formLicenseNum.trim().toUpperCase(),
+      license_class: formLicenseCategory,
+      license_expiry: formLicenseExpiry,
+      contact_number: formContactNum.trim(),
+      safety_score: scoreNum,
       status: formStatus
     };
 
-    let updatedList = [];
-    if (editingDriver) {
-      updatedList = drivers.map(d => d.licenseNum === editingDriver.licenseNum ? savedDriver : d);
-    } else {
-      // check unique license number
-      const duplicate = drivers.find(d => d.licenseNum.toUpperCase() === savedDriver.licenseNum);
-      if (duplicate) {
-        setValidationError(`License Number "${savedDriver.licenseNum}" is already registered.`);
-        return;
-      }
-      updatedList = [...drivers, savedDriver];
-    }
-
-    onUpdateDrivers(updatedList);
-    closeModal();
+    api.post('/drivers/', savedDriver)
+      .then(() => {
+        closeModal();
+      })
+      .catch(err => {
+        if (editingDriver) {
+          api.put(`/drivers/${editingDriver.id || savedDriver.license_number}`, savedDriver)
+            .then(() => closeModal())
+            .catch(e => setValidationError(e.response?.data?.detail || 'Failed to update driver'));
+        } else {
+          setValidationError(err.response?.data?.detail || 'Failed to save driver');
+        }
+      });
   };
 
   const handleDelete = (licenseNum) => {
     if (window.confirm(`Are you sure you want to remove driver profile for license ${licenseNum}?`)) {
-      const updatedList = drivers.filter(d => d.licenseNum !== licenseNum);
-      onUpdateDrivers(updatedList);
+      api.delete(`/drivers/${licenseNum}`)
+        .catch(e => console.error("Failed to delete driver", e));
     }
   };
 
@@ -228,11 +227,16 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
                 </tr>
               ) : (
                 filtered.map((d) => {
-                  const licStatus = getLicenseStatusText(d.licenseExpiry);
-                  const isLowScore = d.safetyScore < 70;
+                  const licenseNum = d.license_number || d.licenseNum;
+                  const licenseCategory = d.license_class || d.licenseCategory;
+                  const licenseExpiry = d.license_expiry || d.licenseExpiry;
+                  const contactNum = d.contact_number || d.contactNum;
+                  const safetyScore = d.safety_score || d.safetyScore;
+                  const licStatus = getLicenseStatusText(licenseExpiry);
+                  const isLowScore = safetyScore < 70;
 
                   return (
-                    <tr key={d.licenseNum}>
+                    <tr key={licenseNum}>
                       <td>
                         <div className="flex-row-center" style={{ gap: '10px' }}>
                           <div className="avatar">{d.name.split(' ').map(n => n[0]).join('')}</div>
@@ -242,8 +246,8 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: '500' }}>{d.licenseNum}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{d.licenseCategory}</div>
+                        <div style={{ fontWeight: '500' }}>{licenseNum}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{licenseCategory}</div>
                       </td>
                       <td>
                         <div className="flex-row-center" style={{ gap: '6px' }}>
@@ -252,24 +256,24 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
                                    licStatus === 'Expiring Soon' ? 'var(--status-inshop)' : 'inherit',
                             fontWeight: licStatus !== 'Valid' ? '600' : 'normal'
                           }}>
-                            {d.licenseExpiry}
+                            {licenseExpiry}
                           </span>
                           {licStatus === 'Expired' && <span className="badge badge-retired" style={{ fontSize: '9px', padding: '1px 6px' }}>Expired</span>}
                           {licStatus === 'Expiring Soon' && <span className="badge badge-inshop" style={{ fontSize: '9px', padding: '1px 6px' }}>30 Days</span>}
                         </div>
                       </td>
-                      <td>{d.contactNum}</td>
+                      <td>{contactNum}</td>
                       <td>
                         <div style={{ minWidth: '100px' }}>
                           <div className="flex-row-center" style={{ justifyContent: 'space-between', marginBottom: '4px', fontSize: '11px' }}>
                             <span style={{ fontWeight: '600', color: isLowScore ? 'var(--status-retired)' : 'var(--status-available)' }}>
-                              {d.safetyScore}/100
+                              {safetyScore}/100
                             </span>
                           </div>
                           <div className="progress-track">
                             <div 
-                              className={`progress-fill ${isLowScore ? 'progress-red' : d.safetyScore > 85 ? 'progress-green' : 'progress-amber'}`} 
-                              style={{ width: `${d.safetyScore}%` }}
+                              className={`progress-fill ${isLowScore ? 'progress-red' : safetyScore > 85 ? 'progress-green' : 'progress-amber'}`} 
+                              style={{ width: `${safetyScore}%` }}
                             ></div>
                           </div>
                         </div>
@@ -285,10 +289,10 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
                           {licStatus !== 'Valid' && (
                             <button 
                               onClick={() => handleSendReminder(d)} 
-                              className={`btn btn-sm ${sentReminder[d.licenseNum] ? 'btn-secondary' : 'btn-success'}`}
+                              className={`btn btn-sm ${sentReminder[licenseNum] ? 'btn-secondary' : 'btn-success'}`}
                               title="Send Email Reminder"
                             >
-                              <Mail size={13} /> {sentReminder[d.licenseNum] ? 'Sent' : 'Remind'}
+                              <Mail size={13} /> {sentReminder[licenseNum] ? 'Sent' : 'Remind'}
                             </button>
                           )}
                           {canEdit && (
@@ -296,7 +300,7 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
                               <button onClick={() => openEditModal(d)} className="btn btn-secondary btn-sm" title="Edit Profile">
                                 <Edit2 size={13} />
                               </button>
-                              <button onClick={() => handleDelete(d.licenseNum)} className="btn btn-danger btn-sm" title="Remove Driver">
+                              <button onClick={() => handleDelete(licenseNum)} className="btn btn-danger btn-sm" title="Remove Driver">
                                 <Trash2 size={13} />
                               </button>
                             </>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit2, Trash2, X, AlertCircle } from 'lucide-react';
+import api from '../utils/api';
 
 export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
   // UI states
@@ -42,12 +43,12 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
 
   const openEditModal = (vehicle) => {
     setEditingVehicle(vehicle);
-    setFormRegNum(vehicle.regNum);
+    setFormRegNum(vehicle.reg_num || vehicle.regNum);
     setFormName(vehicle.name);
     setFormType(vehicle.type);
-    setFormMaxLoad(vehicle.maxLoad);
+    setFormMaxLoad(vehicle.max_load || vehicle.maxLoad);
     setFormOdometer(vehicle.odometer);
-    setFormAcquisitionCost(vehicle.acquisitionCost);
+    setFormAcquisitionCost(vehicle.acquisition_cost || vehicle.acquisitionCost);
     setFormStatus(vehicle.status);
     setFormRegion(vehicle.region || 'North');
     setValidationError('');
@@ -58,67 +59,45 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
     setIsModalOpen(false);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     setValidationError('');
 
-    // Validations
     if (!formRegNum || !formName || !formMaxLoad || !formOdometer || !formAcquisitionCost) {
       setValidationError('All fields are required.');
       return;
     }
 
-    // RegNum unique constraint (check for other vehicles with same regNum if inserting, or if editing and changed)
     const normalizedReg = formRegNum.trim().toUpperCase();
-    const duplicate = vehicles.find(v => v.regNum.toUpperCase() === normalizedReg);
-    if (!editingVehicle && duplicate) {
-      setValidationError(`Registration Number "${normalizedReg}" is already registered. It must be unique.`);
-      return;
-    }
-    if (editingVehicle && editingVehicle.regNum.toUpperCase() !== normalizedReg && duplicate) {
-      setValidationError(`Registration Number "${normalizedReg}" is already registered. It must be unique.`);
-      return;
-    }
-
     const maxLoadNum = Number(formMaxLoad);
     const odometerNum = Number(formOdometer);
     const costNum = Number(formAcquisitionCost);
 
-    if (isNaN(maxLoadNum) || maxLoadNum <= 0) {
-      setValidationError('Maximum Load Capacity must be a positive number.');
-      return;
-    }
-    if (isNaN(odometerNum) || odometerNum < 0) {
-      setValidationError('Odometer must be a non-negative number.');
-      return;
-    }
-    if (isNaN(costNum) || costNum <= 0) {
-      setValidationError('Acquisition Cost must be a positive number.');
-      return;
-    }
+    if (isNaN(maxLoadNum) || maxLoadNum <= 0) return setValidationError('Maximum Load Capacity must be positive.');
+    if (isNaN(odometerNum) || odometerNum < 0) return setValidationError('Odometer must be non-negative.');
+    if (isNaN(costNum) || costNum <= 0) return setValidationError('Acquisition Cost must be positive.');
 
-    const savedVehicle = {
-      regNum: normalizedReg,
+    const payload = {
+      reg_num: normalizedReg,
       name: formName.trim(),
       type: formType,
-      maxLoad: maxLoadNum,
+      max_load: maxLoadNum,
       odometer: odometerNum,
-      acquisitionCost: costNum,
+      acquisition_cost: costNum,
       status: formStatus,
       region: formRegion
     };
 
-    let updatedVehiclesList = [];
-    if (editingVehicle) {
-      // update
-      updatedVehiclesList = vehicles.map(v => v.regNum === editingVehicle.regNum ? savedVehicle : v);
-    } else {
-      // create
-      updatedVehiclesList = [...vehicles, savedVehicle];
+    try {
+      if (editingVehicle) {
+        await api.put(`/vehicles/${editingVehicle.id || normalizedReg}`, payload);
+      } else {
+        await api.post('/vehicles/', payload);
+      }
+      closeModal();
+    } catch (err) {
+      setValidationError(err.response?.data?.detail || 'Failed to save vehicle to live database.');
     }
-
-    onUpdateVehicles(updatedVehiclesList);
-    closeModal();
   };
 
   const handleDelete = (regNum) => {
@@ -131,7 +110,8 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
   // Filter and sort logic
   const filtered = vehicles
     .filter(v => {
-      const searchMatch = v.regNum.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const regMatch = v.reg_num || v.regNum || '';
+      const searchMatch = regMatch.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           v.name.toLowerCase().includes(searchTerm.toLowerCase());
       const typeMatch = typeFilter === 'All' || v.type === typeFilter;
       const statusMatch = statusFilter === 'All' || v.status === statusFilter;
@@ -139,11 +119,11 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
       return searchMatch && typeMatch && statusMatch && regionMatch;
     })
     .sort((a, b) => {
-      if (sortBy === 'regNum') return a.regNum.localeCompare(b.regNum);
+      if (sortBy === 'regNum') return (a.reg_num || a.regNum || '').localeCompare(b.reg_num || b.regNum || '');
       if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'maxLoad') return b.maxLoad - a.maxLoad;
+      if (sortBy === 'maxLoad') return (b.max_load || b.maxLoad) - (a.max_load || a.maxLoad);
       if (sortBy === 'odometer') return a.odometer - b.odometer;
-      if (sortBy === 'acquisitionCost') return b.acquisitionCost - a.acquisitionCost;
+      if (sortBy === 'acquisitionCost') return (b.acquisition_cost || b.acquisitionCost) - (a.acquisition_cost || a.acquisitionCost);
       return 0;
     });
 
@@ -252,13 +232,13 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
                 </tr>
               ) : (
                 filtered.map((v) => (
-                  <tr key={v.regNum}>
-                    <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.regNum}</td>
+                  <tr key={v.id || v.regNum || v.reg_num}>
+                    <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.reg_num || v.regNum}</td>
                     <td style={{ fontWeight: '500' }}>{v.name}</td>
                     <td>{v.type}</td>
-                    <td>{v.maxLoad.toLocaleString()} kg</td>
-                    <td>{v.odometer.toLocaleString()} km</td>
-                    <td>${v.acquisitionCost.toLocaleString()}</td>
+                    <td>{((v.max_load_capacity || v.max_load || v.maxLoad) || 0).toLocaleString()} kg</td>
+                    <td>{(v.odometer || 0).toLocaleString()} km</td>
+                    <td>${((v.acquisition_cost || v.acquisitionCost) || 0).toLocaleString()}</td>
                     <td>{v.region || 'North'}</td>
                     <td>
                       <span className={`badge badge-${v.status.toLowerCase().replace(' ', '')}`}>
@@ -272,7 +252,7 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
                           <button onClick={() => openEditModal(v)} className="btn btn-secondary btn-sm" title="Edit Vehicle">
                             <Edit2 size={13} />
                           </button>
-                          <button onClick={() => handleDelete(v.regNum)} className="btn btn-danger btn-sm" title="Delete Vehicle">
+                          <button onClick={() => handleDelete(v.reg_num || v.regNum)} className="btn btn-danger btn-sm" title="Delete Vehicle">
                             <Trash2 size={13} />
                           </button>
                         </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Shield, Key, RefreshCw, AlertTriangle } from 'lucide-react';
-import { db } from '../utils/db';
+
 
 export default function Settings({ permissions, onUpdatePermissions, onResetDatabase }) {
   

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, DollarSign, Calendar, Tag, AlertCircle, Fuel } from 'lucide-react';
-import { db } from '../utils/db';
+import api from '../utils/api';
+
 
 export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, onAddFuelLog, onAddExpense, userRole }) {
   const [activeTab, setActiveTab] = useState('summary'); // 'summary', 'fuel', 'other'
@@ -51,16 +52,18 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       return;
     }
 
-    const log = {
-      id: `FUEL-${Date.now().toString().slice(-4)}`,
-      vehicleReg: fuelVehicle,
+    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === fuelVehicle);
+
+    const payload = {
+      vehicle_id: vehicle.id,
       liters: litersNum,
       cost: costNum,
       date: fuelDate
     };
 
-    onAddFuelLog(log);
-    setIsFuelModalOpen(false);
+    api.post('/financials/fuel', payload)
+      .then(() => setIsFuelModalOpen(false))
+      .catch(e => setFuelError(e.response?.data?.detail || 'Failed to record fuel log'));
   };
 
   const handleAddExpenseSubmit = (e) => {
@@ -78,17 +81,23 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       return;
     }
 
-    const log = {
-      id: `EXP-${Date.now().toString().slice(-4)}`,
-      vehicleReg: expVehicle,
-      category: expCategory,
+    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === expVehicle);
+
+    // Map frontend categories to backend ExpenseTypeEnum
+    let expenseType = 'Other';
+    if (expCategory === 'Toll') expenseType = 'Toll';
+    if (expCategory === 'Tax') expenseType = 'Tax';
+
+    const payload = {
+      vehicle_id: vehicle.id,
+      type: expenseType,
       cost: costNum,
-      date: expDate,
-      notes: expNotes.trim()
+      date: expDate
     };
 
-    onAddExpense(log);
-    setIsExpenseModalOpen(false);
+    api.post('/financials/expense', payload)
+      .then(() => setIsExpenseModalOpen(false))
+      .catch(e => setExpError(e.response?.data?.detail || 'Failed to record expense'));
   };
 
   return (
@@ -175,14 +184,14 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                 </thead>
                 <tbody>
                   {vehicles.map((v) => {
-                    const vehicleFuel = fuelLogs.filter(f => f.vehicleReg === v.regNum).reduce((sum, f) => sum + Number(f.cost), 0);
-                    const vehicleMaint = maintenance.filter(m => m.vehicleReg === v.regNum && m.status === 'Closed').reduce((sum, m) => sum + Number(m.cost), 0);
-                    const vehicleOther = expenses.filter(e => e.vehicleReg === v.regNum).reduce((sum, e) => sum + Number(e.cost), 0);
+                    const vehicleFuel = fuelLogs.filter(f => f.vehicle_id === v.id || f.vehicleReg === (v.reg_num || v.regNum)).reduce((sum, f) => sum + Number(f.cost), 0);
+                    const vehicleMaint = maintenance.filter(m => (m.vehicle_id === v.id || m.vehicleReg === (v.reg_num || v.regNum)) && (m.status === 'Closed')).reduce((sum, m) => sum + Number(m.cost), 0);
+                    const vehicleOther = expenses.filter(e => e.vehicle_id === v.id || e.vehicleReg === (v.reg_num || v.regNum)).reduce((sum, e) => sum + Number(e.cost), 0);
                     const totalCost = vehicleFuel + vehicleMaint + vehicleOther;
 
                     return (
-                      <tr key={v.regNum}>
-                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.regNum}</td>
+                      <tr key={v.id}>
+                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.reg_num || v.regNum}</td>
                         <td>{v.name}</td>
                         <td>${vehicleFuel.toLocaleString()}</td>
                         <td>${vehicleMaint.toLocaleString()}</td>
@@ -225,16 +234,19 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   </tr>
                 </thead>
                 <tbody>
-                  {[...fuelLogs].reverse().map((f, idx) => (
+                  {[...fuelLogs].reverse().map((f, idx) => {
+                    const vehicleReg = vehicles.find(v => v.id === f.vehicle_id)?.reg_num || f.vehicleReg || `ID: ${f.vehicle_id}`;
+                    return (
                     <tr key={idx}>
                       <td style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>{f.id}</td>
-                      <td style={{ fontWeight: '600' }}>{f.vehicleReg}</td>
+                      <td style={{ fontWeight: '600' }}>{vehicleReg}</td>
                       <td>{f.date}</td>
                       <td>{f.liters} L</td>
                       <td>${f.cost.toLocaleString()}</td>
                       <td>${(f.cost / f.liters).toFixed(2)}/L</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -269,18 +281,21 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   </tr>
                 </thead>
                 <tbody>
-                  {[...expenses].reverse().map((e, idx) => (
+                  {[...expenses].reverse().map((e, idx) => {
+                    const vehicleReg = vehicles.find(v => v.id === e.vehicle_id)?.reg_num || e.vehicleReg || `ID: ${e.vehicle_id}`;
+                    return (
                     <tr key={idx}>
                       <td style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>{e.id}</td>
-                      <td style={{ fontWeight: '600' }}>{e.vehicleReg}</td>
+                      <td style={{ fontWeight: '600' }}>{vehicleReg}</td>
                       <td>
-                        <span className="badge badge-draft" style={{ fontSize: '10px' }}>{e.category}</span>
+                        <span className="badge badge-draft" style={{ fontSize: '10px' }}>{e.type || e.category}</span>
                       </td>
                       <td style={{ fontWeight: '600' }}>${e.cost.toLocaleString()}</td>
                       <td>{e.date}</td>
                       <td>{e.notes || 'N/A'}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -312,7 +327,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   >
                     <option value="">-- Select Vehicle --</option>
                     {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                      <option key={v.regNum} value={v.regNum}>{v.regNum} - {v.name}</option>
+                      <option key={v.id} value={v.reg_num || v.regNum}>{v.reg_num || v.regNum} - {v.name}</option>
                     ))}
                   </select>
                 </div>
@@ -382,7 +397,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   >
                     <option value="">-- Select Vehicle --</option>
                     {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                      <option key={v.regNum} value={v.regNum}>{v.regNum} - {v.name}</option>
+                      <option key={v.id} value={v.reg_num || v.regNum}>{v.reg_num || v.regNum} - {v.name}</option>
                     ))}
                   </select>
                 </div>

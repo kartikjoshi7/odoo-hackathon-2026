@@ -7,7 +7,9 @@ from sqlalchemy.future import select
 from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.user import User
+from app.models.role import Role
 from app.schemas.user import UserCreate, UserResponse
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -53,3 +55,14 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me")
+async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Get the currently logged in user details including role."""
+    role = await db.get(Role, user.role_id)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.email.split("@")[0].title(), # Frontend expects a name field
+        "role": role.name if role else "driver"
+    }

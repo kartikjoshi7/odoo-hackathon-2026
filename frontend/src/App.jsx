@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './utils/db';
+import api from './utils/api';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import Vehicles from './components/Vehicles';
@@ -28,79 +28,55 @@ import {
 import './App.css';
 
 export default function App() {
-  // Database Initializer
-  useEffect(() => {
-    db.init();
-  }, []);
-
-  // Theme & Auth States
-  const [activeUser, setActiveUser] = useState(() => db.getActiveUser());
+  const [activeUser, setActiveUser] = useState(() => {
+    const saved = localStorage.getItem('transitops_active_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [lightMode, setLightMode] = useState(false);
 
-  // Sync state data with localStorage to trigger instant updates across components
-  const [vehicles, setVehicles] = useState(() => db.getVehicles());
-  const [drivers, setDrivers] = useState(() => db.getDrivers());
-  const [trips, setTrips] = useState(() => db.getTrips());
-  const [maintenance, setMaintenance] = useState(() => db.getMaintenance());
-  const [fuelLogs, setFuelLogs] = useState(() => db.getFuelLogs());
-  const [expenses, setExpenses] = useState(() => db.getExpenses());
-  const [permissions, setPermissions] = useState(() => db.getPermissions());
+  // Live Data States
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [trips, setTrips] = useState([]);
+  const [maintenance, setMaintenance] = useState([]);
+  const [fuelLogs, setFuelLogs] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [permissions, setPermissions] = useState({
+    fleet_manager: { dashboard: true, vehicles: true, drivers: true, trips: true, maintenance: true, expenses: true, reports: true, settings: true },
+    driver: { dashboard: true, vehicles: false, drivers: false, trips: true, maintenance: false, expenses: true, reports: false, settings: false },
+    safety_officer: { dashboard: true, vehicles: true, drivers: true, trips: true, maintenance: true, expenses: false, reports: true, settings: false },
+    financial_analyst: { dashboard: true, vehicles: true, drivers: false, trips: true, maintenance: true, expenses: true, reports: true, settings: false }
+  });
 
-  // Reload states when db is altered
-  const refreshStateData = () => {
-    setVehicles(db.getVehicles());
-    setDrivers(db.getDrivers());
-    setTrips(db.getTrips());
-    setMaintenance(db.getMaintenance());
-    setFuelLogs(db.getFuelLogs());
-    setExpenses(db.getExpenses());
-    setPermissions(db.getPermissions());
+  const refreshStateData = async () => {
+    if (!activeUser) return;
+    try {
+      const [vRes, dRes, tRes] = await Promise.all([
+        api.get('/vehicles?limit=1000'),
+        api.get('/drivers?limit=1000'),
+        api.get('/trips/active') // or /trips?limit=1000
+      ]);
+      setVehicles(vRes.data);
+      setDrivers(dRes.data);
+      setTrips(tRes.data);
+    } catch (err) {
+      console.error("Failed to fetch live data", err);
+    }
   };
 
-  // Sync database functions
-  const handleUpdateVehicles = (list) => {
-    db.saveVehicles(list);
-    setVehicles(list);
-  };
+  useEffect(() => {
+    refreshStateData();
+    const ws = new WebSocket('ws://127.0.0.1:8000/api/v1/ws/dashboard');
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.event === "REFRESH_DATA") {
+        refreshStateData();
+      }
+    };
+    return () => ws.close();
+  }, [activeUser]);
 
-  const handleUpdateDrivers = (list) => {
-    db.saveDrivers(list);
-    setDrivers(list);
-  };
-
-  const handleUpdateTrips = (list) => {
-    db.saveTrips(list);
-    setTrips(list);
-  };
-
-  const handleUpdateMaintenance = (list) => {
-    db.saveMaintenance(list);
-    setMaintenance(list);
-  };
-
-  const handleUpdatePermissions = (perms) => {
-    db.savePermissions(perms);
-    setPermissions(perms);
-  };
-
-  const handleAddFuelLog = (log) => {
-    const list = [...fuelLogs, log];
-    db.saveFuelLogs(list);
-    setFuelLogs(list);
-  };
-
-  const handleAddExpense = (expense) => {
-    const list = [...expenses, expense];
-    db.saveExpenses(list);
-    setExpenses(list);
-  };
-
-  const handleResetDatabase = () => {
-    db.reset();
-  };
-
-  // Toggle Theme Class on Body
   useEffect(() => {
     if (lightMode) {
       document.body.classList.add('light-mode');
@@ -109,30 +85,28 @@ export default function App() {
     }
   }, [lightMode]);
 
-  // Auth Callbacks
   const handleLoginSuccess = (user) => {
     setActiveUser(user);
-    // Find first permitted tab
-    const rolePerms = permissions[user.role] || {};
+    const normalizedRole = user.role.toLowerCase().replace(' ', '_');
+    const rolePerms = permissions[normalizedRole] || {};
     const firstTab = Object.keys(rolePerms).find(key => rolePerms[key]) || 'dashboard';
     setCurrentTab(firstTab);
   };
 
   const handleLogout = () => {
-    db.logout();
+    localStorage.removeItem('transitops_token');
+    localStorage.removeItem('transitops_active_user');
     setActiveUser(null);
   };
 
-  // Render Login page if not authenticated
   if (!activeUser) {
     return <Auth onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Check role-based permission for current tab
-  const rolePerms = permissions[activeUser.role] || {};
+  const normalizedRole = activeUser.role.toLowerCase().replace(' ', '_');
+  const rolePerms = permissions[normalizedRole] || {};
   const hasAccessToTab = rolePerms[currentTab];
 
-  // Tab definitions
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { key: 'vehicles', label: 'Vehicle Registry', icon: <Truck size={18} /> },
@@ -144,15 +118,17 @@ export default function App() {
     { key: 'settings', label: 'Settings & RBAC', icon: <SettingsIcon size={18} /> }
   ];
 
-  // Helper title renderer
   const getTabTitle = () => {
     const t = tabs.find(tb => tb.key === currentTab);
     return t ? t.label : 'Operations';
   };
 
+  // We pass empty functions to components that still use the onUpdate pattern 
+  // because the WebSocket will trigger the state refresh automatically!
+  const noop = () => {};
+
   return (
     <div className="app-container">
-      {/* Sidebar Navigation */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <svg className="logo-icon-svg" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
@@ -175,12 +151,9 @@ export default function App() {
           </svg>
           <span className="logo-text">TransitOps</span>
         </div>
-
         <nav className="sidebar-menu">
           {tabs.map((tab) => {
-            const hasPerm = rolePerms[tab.key];
-            if (!hasPerm) return null; // Hide tabs user doesn't have access to
-
+            if (!rolePerms[tab.key]) return null;
             return (
               <button
                 key={tab.key}
@@ -194,7 +167,6 @@ export default function App() {
             );
           })}
         </nav>
-
         <div className="sidebar-footer">
           <div className="user-profile">
             <div className="avatar">
@@ -205,29 +177,16 @@ export default function App() {
               <span className="user-role">{activeUser.role.replace('_', ' ')}</span>
             </div>
           </div>
-
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <button 
-              onClick={() => setLightMode(!lightMode)} 
-              className="theme-toggle-btn"
-              style={{ flex: 1 }}
-              title="Toggle Light/Dark Theme"
-            >
+            <button onClick={() => setLightMode(!lightMode)} className="theme-toggle-btn" style={{ flex: 1 }}>
               {lightMode ? <Moon size={16} /> : <Sun size={16} />}
             </button>
-            <button 
-              onClick={handleLogout} 
-              className="theme-toggle-btn"
-              style={{ flex: 1, color: 'var(--status-retired)' }}
-              title="Log Out"
-            >
+            <button onClick={handleLogout} className="theme-toggle-btn" style={{ flex: 1, color: 'var(--status-retired)' }}>
               <LogOut size={16} />
             </button>
           </div>
         </div>
       </aside>
-
-      {/* Main Content Area */}
       <div className="main-wrapper">
         <header className="header">
           <div className="header-left">
@@ -236,31 +195,15 @@ export default function App() {
           <div className="header-right">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
               <span>Role Privilege:</span>
-              <span style={{ 
-                color: 'var(--accent-primary)', 
-                fontWeight: '600', 
-                backgroundColor: 'rgba(245,158,11,0.1)', 
-                padding: '2px 8px', 
-                borderRadius: '4px',
-                textTransform: 'uppercase',
-                fontSize: '10px'
-              }}>
+              <span style={{ color: 'var(--accent-primary)', fontWeight: '600', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', fontSize: '10px' }}>
                 {activeUser.role.replace('_', ' ')}
               </span>
             </div>
           </div>
         </header>
-
         <main className="content-container">
-          {/* Render target tab with Access Denied check */}
           {!hasAccessToTab ? (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '60px 40px', 
-              backgroundColor: 'var(--bg-secondary)', 
-              borderRadius: '12px', 
-              border: '1px solid var(--border-color)' 
-            }}>
+            <div style={{ textAlign: 'center', padding: '60px 40px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
               <ShieldAlert size={64} style={{ color: 'var(--status-retired)', marginBottom: '16px' }} />
               <h2 style={{ fontSize: '20px', fontWeight: '700' }}>Privilege Level Insufficient</h2>
               <p style={{ color: 'var(--text-secondary)', maxWidth: '460px', margin: '8px auto 0' }}>
@@ -269,77 +212,14 @@ export default function App() {
             </div>
           ) : (
             <>
-              {currentTab === 'dashboard' && (
-                <Dashboard 
-                  vehicles={vehicles} 
-                  drivers={drivers} 
-                  trips={trips} 
-                  maintenance={maintenance} 
-                />
-              )}
-              {currentTab === 'vehicles' && (
-                <Vehicles 
-                  vehicles={vehicles} 
-                  onUpdateVehicles={handleUpdateVehicles} 
-                  userRole={activeUser.role} 
-                />
-              )}
-              {currentTab === 'drivers' && (
-                <Drivers 
-                  drivers={drivers} 
-                  onUpdateDrivers={handleUpdateDrivers} 
-                  userRole={activeUser.role} 
-                />
-              )}
-              {currentTab === 'trips' && (
-                <Trips 
-                  trips={trips}
-                  vehicles={vehicles}
-                  drivers={drivers}
-                  onUpdateTrips={handleUpdateTrips}
-                  onUpdateVehicles={handleUpdateVehicles}
-                  onUpdateDrivers={handleUpdateDrivers}
-                  onAddFuelLog={handleAddFuelLog}
-                  userRole={activeUser.role}
-                />
-              )}
-              {currentTab === 'maintenance' && (
-                <Maintenance 
-                  maintenance={maintenance}
-                  vehicles={vehicles}
-                  onUpdateMaintenance={handleUpdateMaintenance}
-                  onUpdateVehicles={handleUpdateVehicles}
-                  onAddExpense={handleAddExpense}
-                  userRole={activeUser.role}
-                />
-              )}
-              {currentTab === 'expenses' && (
-                <Expenses 
-                  fuelLogs={fuelLogs}
-                  expenses={expenses}
-                  vehicles={vehicles}
-                  maintenance={maintenance}
-                  onAddFuelLog={handleAddFuelLog}
-                  onAddExpense={handleAddExpense}
-                  userRole={activeUser.role}
-                />
-              )}
-              {currentTab === 'reports' && (
-                <Reports 
-                  vehicles={vehicles}
-                  trips={trips}
-                  fuelLogs={fuelLogs}
-                  maintenance={maintenance}
-                  expenses={expenses}
-                />
-              )}
-              {currentTab === 'settings' && (
-                <Settings 
-                  permissions={permissions}
-                  onUpdatePermissions={handleUpdatePermissions}
-                  onResetDatabase={handleResetDatabase}
-                />
-              )}
+              {currentTab === 'dashboard' && <Dashboard vehicles={vehicles} drivers={drivers} trips={trips} maintenance={maintenance} />}
+              {currentTab === 'vehicles' && <Vehicles vehicles={vehicles} onUpdateVehicles={noop} userRole={normalizedRole} />}
+              {currentTab === 'drivers' && <Drivers drivers={drivers} onUpdateDrivers={noop} userRole={normalizedRole} />}
+              {currentTab === 'trips' && <Trips trips={trips} vehicles={vehicles} drivers={drivers} onUpdateTrips={noop} onUpdateVehicles={noop} onUpdateDrivers={noop} onAddFuelLog={noop} userRole={normalizedRole} />}
+              {currentTab === 'maintenance' && <Maintenance maintenance={maintenance} vehicles={vehicles} onUpdateMaintenance={noop} onUpdateVehicles={noop} onAddExpense={noop} userRole={normalizedRole} />}
+              {currentTab === 'expenses' && <Expenses fuelLogs={fuelLogs} expenses={expenses} vehicles={vehicles} maintenance={maintenance} onAddFuelLog={noop} onAddExpense={noop} userRole={normalizedRole} />}
+              {currentTab === 'reports' && <Reports vehicles={vehicles} trips={trips} fuelLogs={fuelLogs} maintenance={maintenance} expenses={expenses} />}
+              {currentTab === 'settings' && <Settings permissions={permissions} onUpdatePermissions={noop} onResetDatabase={noop} />}
             </>
           )}
         </main>

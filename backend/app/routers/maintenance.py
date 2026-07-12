@@ -49,7 +49,11 @@ async def create_maintenance_log(
     return db_log
 
 @router.put("/{log_id}/close", response_model=MaintenanceLogResponse)
-async def close_maintenance_log(log_id: int, db: AsyncSession = Depends(get_db)):
+async def close_maintenance_log(
+    log_id: int, 
+    final_cost: float = 0.0,
+    db: AsyncSession = Depends(get_db)
+):
     """Closes the maintenance log and returns the vehicle to 'Available' (unless retired)."""
     db_log = await db.get(MaintenanceLog, log_id)
     if not db_log:
@@ -61,6 +65,10 @@ async def close_maintenance_log(log_id: int, db: AsyncSession = Depends(get_db))
     if vehicle and vehicle.status != VehicleStatusEnum.RETIRED.value:
         vehicle.status = VehicleStatusEnum.AVAILABLE.value
         
+    db_log.status = "Closed"
+    if final_cost > 0:
+        db_log.cost = final_cost
+
     await db.commit()
     await db.refresh(db_log)
     return db_log
