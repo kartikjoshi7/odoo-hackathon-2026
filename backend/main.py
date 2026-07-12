@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.database import engine
+from app.models import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup actions
     print("Starting up TransitOps API...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     # Shutdown actions
     print("Shutting down TransitOps API...")
@@ -18,8 +21,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# TODO: Include future modular routers here
-# app.include_router(some_router, prefix="/api/v1/module")
+from app.routers import api_router
+
+# Mount unified application routers
+app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/health", tags=["System"])
 async def health_check():
