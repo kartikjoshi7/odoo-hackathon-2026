@@ -24,6 +24,26 @@ export default function Dashboard({ vehicles, drivers, trips, maintenance }) {
   const onTripVehicles = filteredVehicles.filter(v => v.status === 'On Trip').length;
   const utilization = totalVehiclesCount > 0 ? Math.round((onTripVehicles / totalVehiclesCount) * 100) : 0;
 
+  // Status breakdown calculations (supporting custom bar widgets)
+  const totalCount = filteredVehicles.length || 1;
+  const availableCount = filteredVehicles.filter(v => v.status === 'Available').length;
+  const onTripCount = filteredVehicles.filter(v => v.status === 'On Trip').length;
+  const inShopCount = filteredVehicles.filter(v => v.status === 'In Shop').length;
+  const retiredCount = filteredVehicles.filter(v => v.status === 'Retired').length;
+
+  const availablePct = (availableCount / totalCount) * 100;
+  const onTripPct = (onTripCount / totalCount) * 100;
+  const inShopPct = (inShopCount / totalCount) * 100;
+  const retiredPct = (retiredCount / totalCount) * 100;
+
+  // Region allocation calculations
+  const regionsList = ['East', 'West', 'North', 'South', 'Central'];
+  const regionStats = regionsList.map(reg => {
+    const count = filteredVehicles.filter(v => v.region === reg).length;
+    const pct = (count / totalCount) * 100;
+    return { name: reg, count, pct };
+  });
+
   // Trips KPIs
   const activeTripsCount = trips.filter(t => t.status === 'Dispatched').length;
   const pendingTripsCount = trips.filter(t => t.status === 'Draft').length;
@@ -203,6 +223,71 @@ export default function Dashboard({ vehicles, drivers, trips, maintenance }) {
           </div>
           <div className="kpi-icon-wrapper">
             <Percent size={24} />
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Widgets Grid (Vehicle Status & Region Allocation) */}
+      <div className="grid-2col" style={{ marginBottom: '24px' }}>
+        {/* Vehicle Status Bar Chart Card */}
+        <div className="table-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>
+            Vehicle Status
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', marginTop: '6px' }}>
+            {/* Available Row */}
+            <div className="flex-row-center" style={{ gap: '16px' }}>
+              <span style={{ width: '90px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Available</span>
+              <div style={{ flex: 1, height: '14px', backgroundColor: 'var(--border-light)', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${availablePct}%`, height: '100%', backgroundColor: 'var(--status-available)', borderRadius: '6px', transition: 'width 1s ease' }}></div>
+              </div>
+              <span style={{ width: '25px', fontSize: '14px', fontWeight: '700', textAlign: 'right', color: 'var(--status-available)' }}>{availableCount}</span>
+            </div>
+
+            {/* On Trip Row */}
+            <div className="flex-row-center" style={{ gap: '16px' }}>
+              <span style={{ width: '90px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>On Trip</span>
+              <div style={{ flex: 1, height: '14px', backgroundColor: 'var(--border-light)', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${onTripPct}%`, height: '100%', backgroundColor: 'var(--status-ontrip)', borderRadius: '6px', transition: 'width 1s ease' }}></div>
+              </div>
+              <span style={{ width: '25px', fontSize: '14px', fontWeight: '700', textAlign: 'right', color: 'var(--status-ontrip)' }}>{onTripCount}</span>
+            </div>
+
+            {/* In Shop Row */}
+            <div className="flex-row-center" style={{ gap: '16px' }}>
+              <span style={{ width: '90px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>In Shop</span>
+              <div style={{ flex: 1, height: '14px', backgroundColor: 'var(--border-light)', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${inShopPct}%`, height: '100%', backgroundColor: 'var(--status-inshop)', borderRadius: '6px', transition: 'width 1s ease' }}></div>
+              </div>
+              <span style={{ width: '25px', fontSize: '14px', fontWeight: '700', textAlign: 'right', color: 'var(--status-inshop)' }}>{inShopCount}</span>
+            </div>
+
+            {/* Retired Row */}
+            <div className="flex-row-center" style={{ gap: '16px' }}>
+              <span style={{ width: '90px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Retired</span>
+              <div style={{ flex: 1, height: '14px', backgroundColor: 'var(--border-light)', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${retiredPct}%`, height: '100%', backgroundColor: 'var(--status-retired)', borderRadius: '6px', transition: 'width 1s ease' }}></div>
+              </div>
+              <span style={{ width: '25px', fontSize: '14px', fontWeight: '700', textAlign: 'right', color: 'var(--status-retired)' }}>{retiredCount}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Asset Region Allocation Card */}
+        <div className="table-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>
+            Asset Region Allocation
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
+            {regionStats.map((region, idx) => (
+              <div key={idx} className="flex-row-center" style={{ gap: '16px' }}>
+                <span style={{ width: '90px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{region.name}</span>
+                <div style={{ flex: 1, height: '10px', backgroundColor: 'var(--border-light)', borderRadius: '6px', overflow: 'hidden' }}>
+                  <div style={{ width: `${region.pct}%`, height: '100%', backgroundColor: 'var(--accent-primary)', borderRadius: '6px', transition: 'width 1s ease' }}></div>
+                </div>
+                <span style={{ width: '25px', fontSize: '14px', fontWeight: '700', textAlign: 'right', color: 'var(--text-secondary)' }}>{region.count}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
