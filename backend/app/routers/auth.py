@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from app.core.limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -18,10 +19,16 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
         
     hashed_password = get_password_hash(user_in.password)
+    
+    # SECURITY PATCH: Privilege Escalation Prevention
+    # Ignore the client's requested role_id and force all public signups to be Drivers (role_id=2).
+    # Fleet Managers must manually upgrade users in the database if they need higher permissions.
+    safe_role_id = 2
+    
     db_user = User(
         email=user_in.email,
         password_hash=hashed_password,
-        role_id=user_in.role_id
+        role_id=safe_role_id
     )
     db.add(db_user)
     await db.commit()
@@ -29,7 +36,8 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     return db_user
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     """
     OAuth2 compatible token login. Get an access token for future requests.
     """
