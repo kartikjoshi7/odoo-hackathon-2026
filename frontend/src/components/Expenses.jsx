@@ -52,7 +52,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       return;
     }
 
-    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === fuelVehicle);
+    const vehicle = vehicles.find(v => (v.registration_number || v.reg_num || v.regNum) === fuelVehicle);
 
     const payload = {
       vehicle_id: vehicle.id,
@@ -61,9 +61,15 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       date: fuelDate
     };
 
+    const formatError = (errorObj, fallback) => {
+      if (!errorObj.response?.data?.detail) return fallback;
+      const detail = errorObj.response.data.detail;
+      return Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : String(detail);
+    };
+
     api.post('/financials/fuel', payload)
       .then(() => setIsFuelModalOpen(false))
-      .catch(e => setFuelError(e.response?.data?.detail || 'Failed to record fuel log'));
+      .catch(e => setFuelError(formatError(e, 'Failed to record fuel log')));
   };
 
   const handleAddExpenseSubmit = (e) => {
@@ -81,7 +87,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       return;
     }
 
-    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === expVehicle);
+    const vehicle = vehicles.find(v => (v.registration_number || v.reg_num || v.regNum) === expVehicle);
 
     // Map frontend categories to backend ExpenseTypeEnum
     let expenseType = 'Other';
@@ -95,9 +101,15 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
       date: expDate
     };
 
+    const formatError = (errorObj, fallback) => {
+      if (!errorObj.response?.data?.detail) return fallback;
+      const detail = errorObj.response.data.detail;
+      return Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : String(detail);
+    };
+
     api.post('/financials/expense', payload)
       .then(() => setIsExpenseModalOpen(false))
-      .catch(e => setExpError(e.response?.data?.detail || 'Failed to record expense'));
+      .catch(e => setExpError(formatError(e, 'Failed to record expense')));
   };
 
   return (
@@ -184,15 +196,15 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                 </thead>
                 <tbody>
                   {vehicles.map((v) => {
-                    const vehicleFuel = fuelLogs.filter(f => f.vehicle_id === v.id || f.vehicleReg === (v.reg_num || v.regNum)).reduce((sum, f) => sum + Number(f.cost), 0);
-                    const vehicleMaint = maintenance.filter(m => (m.vehicle_id === v.id || m.vehicleReg === (v.reg_num || v.regNum)) && (m.status === 'Closed')).reduce((sum, m) => sum + Number(m.cost), 0);
-                    const vehicleOther = expenses.filter(e => e.vehicle_id === v.id || e.vehicleReg === (v.reg_num || v.regNum)).reduce((sum, e) => sum + Number(e.cost), 0);
+                    const vehicleFuel = fuelLogs.filter(f => f.vehicle_id === v.id || f.vehicleReg === (v.registration_number || v.reg_num || v.regNum)).reduce((sum, f) => sum + Number(f.cost), 0);
+                    const vehicleMaint = maintenance.filter(m => (m.vehicle_id === v.id || m.vehicleReg === (v.registration_number || v.reg_num || v.regNum)) && (m.status === 'Closed')).reduce((sum, m) => sum + Number(m.cost), 0);
+                    const vehicleOther = expenses.filter(e => e.vehicle_id === v.id || e.vehicleReg === (v.registration_number || v.reg_num || v.regNum)).reduce((sum, e) => sum + Number(e.cost), 0);
                     const totalCost = vehicleFuel + vehicleMaint + vehicleOther;
 
                     return (
                       <tr key={v.id}>
-                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.reg_num || v.regNum}</td>
-                        <td>{v.name}</td>
+                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.registration_number || v.reg_num || v.regNum}</td>
+                        <td>{v.model || v.name}</td>
                         <td>${vehicleFuel.toLocaleString()}</td>
                         <td>${vehicleMaint.toLocaleString()}</td>
                         <td>${vehicleOther.toLocaleString()}</td>
@@ -327,7 +339,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   >
                     <option value="">-- Select Vehicle --</option>
                     {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                      <option key={v.id} value={v.reg_num || v.regNum}>{v.reg_num || v.regNum} - {v.name}</option>
+                      <option key={v.id} value={v.registration_number || v.reg_num || v.regNum}>{v.registration_number || v.reg_num || v.regNum} - {v.model || v.name}</option>
                     ))}
                   </select>
                 </div>
@@ -397,7 +409,7 @@ export default function Expenses({ fuelLogs, expenses, vehicles, maintenance, on
                   >
                     <option value="">-- Select Vehicle --</option>
                     {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                      <option key={v.id} value={v.reg_num || v.regNum}>{v.reg_num || v.regNum} - {v.name}</option>
+                      <option key={v.id} value={v.registration_number || v.reg_num || v.regNum}>{v.registration_number || v.reg_num || v.regNum} - {v.model || v.name}</option>
                     ))}
                   </select>
                 </div>

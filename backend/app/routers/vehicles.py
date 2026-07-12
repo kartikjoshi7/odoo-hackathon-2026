@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from enum import Enum
 
@@ -19,7 +20,11 @@ async def create_vehicle(vehicle: VehicleCreate, db: AsyncSession = Depends(get_
     data = serialize_enums(vehicle.model_dump())
     db_vehicle = Vehicle(**data)
     db.add(db_vehicle)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Vehicle with this registration number already exists.")
     await db.refresh(db_vehicle)
     return db_vehicle
 

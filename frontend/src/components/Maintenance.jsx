@@ -53,7 +53,7 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
 
     const finalServiceType = serviceType === 'Other' ? customServiceType.trim() : serviceType;
 
-    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === selectedVehicle);
+    const vehicle = vehicles.find(v => (v.registration_number || v.reg_num || v.regNum) === selectedVehicle);
 
     const payload = {
       vehicle_id: vehicle.id,
@@ -63,9 +63,15 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
       status: 'Open'
     };
 
+    const formatError = (errorObj) => {
+      if (!errorObj.response?.data?.detail) return 'Failed to schedule maintenance';
+      const detail = errorObj.response.data.detail;
+      return Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : String(detail);
+    };
+
     api.post('/maintenance/', payload)
       .then(() => closeModal())
-      .catch(e => setValidationError(e.response?.data?.detail || 'Failed to schedule maintenance'));
+      .catch(e => setValidationError(formatError(e)));
   };
 
   const openCloseModal = (log) => {
@@ -223,8 +229,8 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
                   >
                     <option value="">-- Choose Vehicle --</option>
                     {eligibleVehicles.map(v => (
-                      <option key={v.id} value={v.reg_num || v.regNum}>
-                        {v.reg_num || v.regNum} - {v.name} ({v.status})
+                      <option key={v.id} value={v.registration_number || v.reg_num || v.regNum}>
+                        {v.registration_number || v.reg_num || v.regNum} - {v.model || v.name} ({v.status})
                       </option>
                     ))}
                   </select>

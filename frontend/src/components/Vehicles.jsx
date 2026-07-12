@@ -78,14 +78,13 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
     if (isNaN(costNum) || costNum <= 0) return setValidationError('Acquisition Cost must be positive.');
 
     const payload = {
-      reg_num: normalizedReg,
-      name: formName.trim(),
+      registration_number: normalizedReg,
+      model: formName.trim(),
       type: formType,
-      max_load: maxLoadNum,
+      max_load_capacity: maxLoadNum,
       odometer: odometerNum,
       acquisition_cost: costNum,
-      status: formStatus,
-      region: formRegion
+      status: formStatus
     };
 
     try {
@@ -96,7 +95,15 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
       }
       closeModal();
     } catch (err) {
-      setValidationError(err.response?.data?.detail || 'Failed to save vehicle to live database.');
+      let errorMsg = 'Failed to save vehicle to live database.';
+      if (err.response?.data?.detail) {
+        if (Array.isArray(err.response.data.detail)) {
+          errorMsg = err.response.data.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+        } else {
+          errorMsg = String(err.response.data.detail);
+        }
+      }
+      setValidationError(errorMsg);
     }
   };
 
@@ -232,13 +239,13 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
                 </tr>
               ) : (
                 filtered.map((v) => (
-                  <tr key={v.id || v.regNum || v.reg_num}>
-                    <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.reg_num || v.regNum}</td>
-                    <td style={{ fontWeight: '500' }}>{v.name}</td>
+                  <tr key={v.id || v.registration_number || v.regNum || v.reg_num}>
+                    <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{v.registration_number || v.reg_num || v.regNum}</td>
+                    <td style={{ fontWeight: '500' }}>{v.model || v.name}</td>
                     <td>{v.type}</td>
-                    <td>{((v.max_load_capacity || v.max_load || v.maxLoad) || 0).toLocaleString()} kg</td>
-                    <td>{(v.odometer || 0).toLocaleString()} km</td>
-                    <td>${((v.acquisition_cost || v.acquisitionCost) || 0).toLocaleString()}</td>
+                    <td>{Number(v.max_load_capacity || v.max_load || v.maxLoad || 0).toLocaleString()} kg</td>
+                    <td>{Number(v.odometer || 0).toLocaleString()} km</td>
+                    <td>${Number(v.acquisition_cost || v.acquisitionCost || 0).toLocaleString()}</td>
                     <td>{v.region || 'North'}</td>
                     <td>
                       <span className={`badge badge-${v.status.toLowerCase().replace(' ', '')}`}>

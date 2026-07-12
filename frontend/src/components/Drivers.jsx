@@ -44,8 +44,8 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
     setEditingDriver(driver);
     setFormName(driver.name);
     setFormLicenseNum(driver.license_number || driver.licenseNum);
-    setFormLicenseCategory(driver.license_class || driver.licenseCategory);
-    setFormLicenseExpiry(driver.license_expiry || driver.licenseExpiry);
+    setFormLicenseCategory(driver.license_category || driver.license_class || driver.licenseCategory);
+    setFormLicenseExpiry(driver.license_expiry_date || driver.license_expiry || driver.licenseExpiry);
     setFormContactNum(driver.contact_number || driver.contactNum);
     setFormSafetyScore(driver.safety_score || driver.safetyScore);
     setFormStatus(driver.status);
@@ -75,26 +75,28 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
     const savedDriver = {
       name: formName.trim(),
       license_number: formLicenseNum.trim().toUpperCase(),
-      license_class: formLicenseCategory,
-      license_expiry: formLicenseExpiry,
+      license_category: formLicenseCategory,
+      license_expiry_date: formLicenseExpiry,
       contact_number: formContactNum.trim(),
       safety_score: scoreNum,
       status: formStatus
     };
 
-    api.post('/drivers/', savedDriver)
-      .then(() => {
-        closeModal();
-      })
-      .catch(err => {
-        if (editingDriver) {
-          api.put(`/drivers/${editingDriver.id || savedDriver.license_number}`, savedDriver)
-            .then(() => closeModal())
-            .catch(e => setValidationError(e.response?.data?.detail || 'Failed to update driver'));
-        } else {
-          setValidationError(err.response?.data?.detail || 'Failed to save driver');
-        }
-      });
+    const formatError = (errorObj) => {
+      if (!errorObj.response?.data?.detail) return 'Failed to save driver';
+      const detail = errorObj.response.data.detail;
+      return Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : String(detail);
+    };
+
+    if (editingDriver) {
+      api.put(`/drivers/${editingDriver.id || savedDriver.license_number}`, savedDriver)
+        .then(() => closeModal())
+        .catch(e => setValidationError(formatError(e)));
+    } else {
+      api.post('/drivers/', savedDriver)
+        .then(() => closeModal())
+        .catch(err => setValidationError(formatError(err)));
+    }
   };
 
   const handleDelete = (licenseNum) => {
@@ -228,8 +230,8 @@ export default function Drivers({ drivers, onUpdateDrivers, userRole }) {
               ) : (
                 filtered.map((d) => {
                   const licenseNum = d.license_number || d.licenseNum;
-                  const licenseCategory = d.license_class || d.licenseCategory;
-                  const licenseExpiry = d.license_expiry || d.licenseExpiry;
+                  const licenseCategory = d.license_category || d.licenseCategory || d.license_class;
+                  const licenseExpiry = d.license_expiry_date || d.licenseExpiry || d.license_expiry;
                   const contactNum = d.contact_number || d.contactNum;
                   const safetyScore = d.safety_score || d.safetyScore;
                   const licStatus = getLicenseStatusText(licenseExpiry);

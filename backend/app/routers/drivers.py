@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.exc import IntegrityError
 from typing import List
 from datetime import date
 from enum import Enum
@@ -20,7 +21,11 @@ async def create_driver(driver: DriverCreate, db: AsyncSession = Depends(get_db)
     data = serialize_enums(driver.model_dump())
     db_driver = Driver(**data)
     db.add(db_driver)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Driver with this license number already exists.")
     await db.refresh(db_driver)
     return db_driver
 

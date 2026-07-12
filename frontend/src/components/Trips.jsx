@@ -74,7 +74,7 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
     }
 
     // Check cargo capacity of selected vehicle
-    const vehicle = vehicles.find(v => (v.reg_num || v.regNum) === selectedVehicle);
+    const vehicle = vehicles.find(v => (v.registration_number || v.reg_num || v.regNum) === selectedVehicle);
     if (vehicle && weightNum > (vehicle.max_load_capacity || vehicle.max_load || vehicle.maxLoad)) {
       setValidationError(`Weight Limit Exceeded: Cargo weight (${weightNum} kg) exceeds maximum load capacity of selected vehicle ${vehicle.name}.`);
       return;
@@ -82,7 +82,7 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
 
     const driver = drivers.find(d => d.name === selectedDriver);
     if (driver) {
-      const expiry = new Date(driver.license_expiry || driver.licenseExpiry);
+      const expiry = new Date(driver.license_expiry_date || driver.license_expiry || driver.licenseExpiry);
       if (expiry < today) {
         setValidationError(`Cannot dispatch: Selected driver ${driver.name} has an expired license.`);
         return;
@@ -102,9 +102,15 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
       planned_distance: distNum
     };
 
+    const formatError = (errorObj) => {
+      if (!errorObj.response?.data?.detail) return 'Failed to create trip';
+      const detail = errorObj.response.data.detail;
+      return Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : String(detail);
+    };
+
     api.post('/trips/', payload)
       .then(() => closeModal())
-      .catch(e => setValidationError(e.response?.data?.detail || 'Failed to create trip'));
+      .catch(e => setValidationError(formatError(e)));
   };
 
   const handleDispatchTrip = (tripId) => {
@@ -329,8 +335,8 @@ export default function Trips({ trips, vehicles, drivers, onUpdateTrips, onUpdat
                     >
                       <option value="">-- Choose Vehicle --</option>
                       {eligibleVehicles.map(v => (
-                        <option key={v.id} value={v.reg_num || v.regNum}>
-                          {(v.reg_num || v.regNum)} - {v.name} (Cap: {v.max_load_capacity || v.max_load || v.maxLoad} kg)
+                        <option key={v.id} value={v.registration_number || v.reg_num || v.regNum}>
+                          {(v.registration_number || v.reg_num || v.regNum)} - {v.model || v.name} (Cap: {v.max_load_capacity || v.max_load || v.maxLoad} kg)
                         </option>
                       ))}
                     </select>
