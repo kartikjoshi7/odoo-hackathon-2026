@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
@@ -25,9 +25,14 @@ async def create_driver(driver: DriverCreate, db: AsyncSession = Depends(get_db)
     return db_driver
 
 @router.get("/", response_model=List[DriverResponse])
-async def list_drivers(db: AsyncSession = Depends(get_db)):
+async def list_drivers(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db)
+):
     """Retrieve all personnel data."""
-    result = await db.execute(select(Driver))
+    query = select(Driver).offset(skip).limit(limit)
+    result = await db.execute(query)
     return result.scalars().all()
 
 @router.get("/{driver_id}", response_model=DriverResponse)

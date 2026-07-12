@@ -24,11 +24,17 @@ async def create_vehicle(vehicle: VehicleCreate, db: AsyncSession = Depends(get_
     return db_vehicle
 
 @router.get("/", response_model=List[VehicleResponse])
-async def list_vehicles(status: Optional[VehicleStatusEnum] = None, db: AsyncSession = Depends(get_db)):
+async def list_vehicles(
+    status: Optional[VehicleStatusEnum] = None, 
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db)
+):
     """Retrieve all vehicles, optionally filtering by current status."""
     query = select(Vehicle)
     if status:
         query = query.where(Vehicle.status == status.value)
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

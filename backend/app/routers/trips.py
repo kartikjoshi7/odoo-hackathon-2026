@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.sockets import manager
+from app.core.audit import log_audit_event
+from app.api.deps import get_current_user
+from app.models.user import User
 from sqlalchemy.future import select
 from typing import List
 from enum import Enum
@@ -18,7 +22,12 @@ def serialize_enums(data: dict) -> dict:
     return {k: v.value if isinstance(v, Enum) else v for k, v in data.items()}
 
 @router.post("/", response_model=TripResponse, status_code=201)
-async def dispatch_trip(trip: TripCreate, db: AsyncSession = Depends(get_db)):
+async def dispatch_trip(
+    trip: TripCreate, 
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Core Dispatch Workflow. Enforces relational constraints:
     - Driver must be 'Available'
@@ -59,12 +68,23 @@ async def dispatch_trip(trip: TripCreate, db: AsyncSession = Depends(get_db)):
     
     await db.commit()
     await db.refresh(db_trip)
+    
+    # WebSocket Broadcast (Lightweight flag as requested)
+    await manager.broadcast({"event": "REFRESH_DATA"})
+    
+    # Audit Log via Background Task
+    background_tasks.add_task(log_audit_event, current_user.id, "DISPATCHED_TRIP", f"Trip: {db_trip.id}")
+    
     return db_trip
 
 @router.get("/active", response_model=List[TripResponse])
-async def list_active_trips(db: AsyncSession = Depends(get_db)):
+async def list_active_trips(
+    skip: int = Query(0, ge=0), 
+    limit: int = Query(100, ge=1, le=1000), 
+    db: AsyncSession = Depends(get_db)
+):
     """Fetch all trips actively in transit."""
-    query = select(Trip).where(Trip.status == TripStatusEnum.DISPATCHED.value)
+    query = select(Trip).where(Trip.status == TripStatusEnum.DISPATCHED.value).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
