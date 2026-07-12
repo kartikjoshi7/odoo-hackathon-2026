@@ -99,3 +99,28 @@ async def complete_trip(
     await db.commit()
     await db.refresh(db_trip)
     return db_trip
+
+@router.put("/{trip_id}/cancel", response_model=TripResponse)
+async def cancel_trip(trip_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Cancels a dispatched trip and restores the attached vehicle and driver to 'Available'.
+    """
+    db_trip = await db.get(Trip, trip_id)
+    if not db_trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    if db_trip.status != TripStatusEnum.DISPATCHED.value:
+        raise HTTPException(status_code=400, detail="Invalid State: Only dispatched trips can be cancelled")
+
+    db_trip.status = TripStatusEnum.CANCELLED.value
+    
+    vehicle = await db.get(Vehicle, db_trip.vehicle_id)
+    if vehicle:
+        vehicle.status = VehicleStatusEnum.AVAILABLE.value
+        
+    driver = await db.get(Driver, db_trip.driver_id)
+    if driver:
+        driver.status = DriverStatusEnum.AVAILABLE.value
+
+    await db.commit()
+    await db.refresh(db_trip)
+    return db_trip

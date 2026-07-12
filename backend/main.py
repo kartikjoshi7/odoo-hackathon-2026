@@ -14,11 +14,29 @@ async def lifespan(app: FastAPI):
     print("Shutting down TransitOps API...")
     await engine.dispose()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="TransitOps API",
     description="Smart Transport Operations Platform backend.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Explicitly whitelist the exact frontend URLs
+origins = [
+    "http://localhost:5173",    # Standard Vite React port
+    "http://localhost:3000",    # Standard Create React App port
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # Replaced the wildcard with explicit origins
+    allow_credentials=True,     # Allows the Authorization headers to pass
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 from app.routers import api_router
