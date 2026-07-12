@@ -6,9 +6,9 @@
   --bg-secondary: #111827;
   --bg-tertiary: #1f2937;
   
-  --accent-primary: #f59e0b; /* Amber/Orange like the mockup */
-  --accent-secondary: #8b5cf6; /* Odoo Purple */
-  --accent-hover: #d97706;
+  --accent-primary: #a24b89; /* Odoo Plum/Purple (readable on dark bg) */
+  --accent-secondary: #d946ef; /* Bright accent fuchsia/purple */
+  --accent-hover: #be59a3;
   
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
@@ -32,7 +32,7 @@
   --status-inshop: #f59e0b; /* Amber */
   --status-retired: #ef4444; /* Red */
   --status-suspended: #6b7280; /* Grey */
-  --status-draft: #8b5cf6; /* Purple */
+  --status-draft: #a24b89; /* Odoo Purple */
   
   /* Font Family */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -49,9 +49,9 @@
   --bg-secondary: #ffffff;
   --bg-tertiary: #f9fafb;
   
-  --accent-primary: #d97706;
-  --accent-secondary: #7c3aed;
-  --accent-hover: #b45309;
+  --accent-primary: #714B67; /* Official Odoo Purple */
+  --accent-secondary: #906384; /* Medium Odoo Purple */
+  --accent-hover: #5d3b54; /* Darker purple hover */
   
   --text-primary: #111827;
   --text-secondary: #4b5563;
