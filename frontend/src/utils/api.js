@@ -19,9 +19,12 @@ api.interceptors.request.use((config) => {
 // Global response interceptor
 api.interceptors.response.use((response) => response, (error) => {
   if (error.response && error.response.status === 401) {
-    localStorage.removeItem('transitops_token');
-    localStorage.removeItem('transitops_active_user');
-    window.location.reload();
+    // Only reload and clear storage if the 401 did NOT come from the login endpoint
+    if (error.config && !error.config.url.includes('/auth/login')) {
+      localStorage.removeItem('transitops_token');
+      localStorage.removeItem('transitops_active_user');
+      window.location.reload();
+    }
   }
   return Promise.reject(error);
 });

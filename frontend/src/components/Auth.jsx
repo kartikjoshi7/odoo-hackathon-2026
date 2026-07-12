@@ -121,7 +121,16 @@ export default function Auth({ onLoginSuccess }) {
             </div>
             
             <div className="auth-input-group">
-              <label htmlFor="password">Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="password">Password</label>
+                <button 
+                  type="button" 
+                  onClick={() => alert('For the Odoo Hackathon 2026, password resets are disabled. Please contact your Fleet Manager or use the preset demo accounts.')} 
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <div className="auth-input-wrapper">
                 <Lock size={16} className="auth-input-icon" />
                 <input
