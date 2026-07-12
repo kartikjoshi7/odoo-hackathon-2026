@@ -15,6 +15,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -35,8 +36,3 @@ backend/.venv/
 backend/.env
 frontend/.env
 
-# Frontend source files (not ready to push yet - ignore until staged manually)
-frontend/src/
-frontend/public/
-frontend/package-lock.json
-frontend/.oxlintrc.json
