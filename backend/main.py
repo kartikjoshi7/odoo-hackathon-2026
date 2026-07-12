@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from contextlib import asynccontextmanager
 from app.core.database import engine
 from app.models import Base
@@ -15,6 +15,9 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.limiter import limiter
 
 app = FastAPI(
     title="TransitOps API",
@@ -22,6 +25,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Explicitly whitelist the exact frontend URLs
 origins = [
@@ -43,6 +49,18 @@ from app.routers import api_router
 
 # Mount unified application routers
 app.include_router(api_router, prefix="/api/v1")
+
+from app.core.sockets import manager
+
+@app.websocket("/api/v1/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # We don't expect messages from the frontend, but we keep the connection open
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 @app.get("/health", tags=["System"])
 async def health_check():

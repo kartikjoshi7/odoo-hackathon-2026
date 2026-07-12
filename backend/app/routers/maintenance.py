@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.sockets import manager
+from app.core.audit import log_audit_event
+from app.api.deps import get_current_user
+from app.models.user import User
 from typing import List
 from enum import Enum
 
@@ -15,7 +19,12 @@ def serialize_enums(data: dict) -> dict:
     return {k: v.value if isinstance(v, Enum) else v for k, v in data.items()}
 
 @router.post("/", response_model=MaintenanceLogResponse, status_code=201)
-async def create_maintenance_log(log: MaintenanceLogCreate, db: AsyncSession = Depends(get_db)):
+async def create_maintenance_log(
+    log: MaintenanceLogCreate, 
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Logs a maintenance activity and locks the vehicle status to 'In Shop'."""
     vehicle = await db.get(Vehicle, log.vehicle_id)
     if not vehicle:
@@ -30,6 +39,13 @@ async def create_maintenance_log(log: MaintenanceLogCreate, db: AsyncSession = D
     
     await db.commit()
     await db.refresh(db_log)
+    
+    # WebSocket Broadcast
+    await manager.broadcast({"event": "REFRESH_DATA"})
+    
+    # Audit Log via Background Task
+    background_tasks.add_task(log_audit_event, current_user.id, "CREATED_MAINTENANCE", f"Vehicle: {vehicle.id}")
+    
     return db_log
 
 @router.put("/{log_id}/close", response_model=MaintenanceLogResponse)

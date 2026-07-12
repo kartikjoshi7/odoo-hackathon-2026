@@ -8,3 +8,4 @@ from .trip import Trip
 from .maintenance import MaintenanceLog
 from .fuel import FuelLog
 from .expense import Expense
+from .audit import AuditLog
