@@ -16,6 +16,7 @@ class VehicleBase(BaseModel):
     max_load_capacity: float = Field(..., gt=0, description="Max load capacity must be greater than 0")
     odometer: int = Field(0, ge=0)
     acquisition_cost: Decimal = Field(..., ge=0)
+    region: str = Field("North", min_length=1)
     status: VehicleStatusEnum = VehicleStatusEnum.AVAILABLE
 
 class VehicleCreate(VehicleBase):
@@ -28,6 +29,7 @@ class VehicleUpdate(BaseModel):
     max_load_capacity: Optional[float] = Field(None, gt=0)
     odometer: Optional[int] = Field(None, ge=0)
     acquisition_cost: Optional[Decimal] = Field(None, ge=0)
+    region: Optional[str] = Field(None, min_length=1)
     status: Optional[VehicleStatusEnum] = None
 
 class VehicleResponse(VehicleBase):

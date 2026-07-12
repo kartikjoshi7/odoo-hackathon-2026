@@ -39,7 +39,7 @@ TransitOps adheres strictly to the "Odoo Way", focusing on modularity, robust OR
 **Frontend:**
 * React 18 + Vite
 * Axios (API Client)
-* Recharts (Analytics)
+* Custom Native SVG Charting Engine
 * Lucide React (Iconography)
 
 **Backend:**

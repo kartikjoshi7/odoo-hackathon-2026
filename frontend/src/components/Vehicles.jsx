@@ -84,6 +84,7 @@ export default function Vehicles({ vehicles, onUpdateVehicles, userRole }) {
       max_load_capacity: maxLoadNum,
       odometer: odometerNum,
       acquisition_cost: costNum,
+      region: formRegion,
       status: formStatus
     };
 

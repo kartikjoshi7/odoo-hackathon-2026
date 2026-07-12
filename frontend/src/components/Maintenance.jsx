@@ -159,7 +159,7 @@ export default function Maintenance({ maintenance, vehicles, onUpdateMaintenance
               ) : (
                 [...maintenance].reverse().map((log) => {
                   const vehicleReg = vehicles.find(v => v.id === log.vehicle_id)?.reg_num || log.vehicleReg || log.vehicle_id;
-                  const logStatus = log.status === 'Open' || log.status === 'Active' ? 'Active' : 'Closed';
+                  const logStatus = log.status === 'Open' ? 'Active' : 'Closed';
                   
                   return (
                   <tr key={log.id}>
