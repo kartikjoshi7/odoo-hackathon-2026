@@ -116,6 +116,7 @@ export default function Auth({ onLoginSuccess }) {
                   className="auth-input"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -140,6 +141,7 @@ export default function Auth({ onLoginSuccess }) {
                   className="auth-input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
                 />
               </div>
             </div>
