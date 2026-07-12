@@ -34,4 +34,9 @@ backend/.venv/
 # Application Secrets & Configurations
 backend/.env
 frontend/.env
-.env
+
+# Frontend source files (not ready to push yet - ignore until staged manually)
+frontend/src/
+frontend/public/
+frontend/package-lock.json
+frontend/.oxlintrc.json
